@@ -1,0 +1,40 @@
+ # Copyright (c) 2022, salesforce.com, inc.
+ # All rights reserved.
+ # SPDX-License-Identifier: BSD-3-Clause
+ # For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
+
+model:
+  arch: Sggp_pretrain
+
+  load_pretrained: True
+  pretrained: "https://storage.googleapis.com/sfr-pcl-data-research/ALBEF/ALBEF.pth"
+
+  # vit encoder
+  vit_type: "base"
+  image_size: 224
+  patch_size: 16
+  vit_embed_dim: 768
+  mask_patch_size: 32
+  mask_ratio: 0.6
+
+
+  # bert config
+  med_config_path: "configs/models/sggp_text_bert.json"
+  unified_med_config_path: "configs/models/sggp_unified_bert.json"
+  mlm_mask_prob: 0.15
+  detector_config_path: "common/models/mask_rcnn_vitdet_pretrain.py"
+  embed_dim: 256
+  momentum: 0.995
+  alpha: 0.4
+  temp: 0.07
+
+  max_txt_len: 30
+
+#preprocess:
+#    vis_processor:
+#        train:
+#          name: "blip_image_train"
+#          image_size: 224
+#    text_processor:
+#        train:
+#          name: "blip_caption"
