@@ -1,0 +1,57 @@
+ # Copyright (c) 2022, salesforce.com, inc.
+ # All rights reserved.
+ # SPDX-License-Identifier: BSD-3-Clause
+ # For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
+
+model:
+  arch: SggpPretrain
+  model_type: base_cc3m
+  load_finetuned: True # false means  training on pretrained rather finetuned models
+  num_classes: 51 #todo what is it used for?
+#  META_ARCHITECTURE: "GeneralizedRCNN" # detector arch
+
+datasets:
+  conceptual_caption_3m: # name of the dataset builder
+    vis_processor:
+      train:
+        name: "sggp_image_train"
+        image_size: 224
+        patch_size: 16
+    text_processor:
+      train:
+        name: "sggp_caption"
+
+run:
+  task: image_text_pretrain
+  runner: runner_iter
+  max_iters: 8e5
+  iters_per_inner_epoch: 1e4
+
+  # optimizer
+  lr_sched: "linear_warmup_step_lr"
+  # lr_sched: "linear_warmup_cosine_lr"
+  init_lr: 4e-4 #3e-4
+  min_lr: 1e-6
+  warmup_lr: 1e-6
+  lr_decay_rate: 0.9
+
+  weight_decay: 0.05
+  max_epoch: 20
+  batch_size_train: 2 #指的是一个gpu的量
+  batch_size_eval: 3
+  num_workers: 1
+  warmup_steps: 3000
+
+  seed: 20
+  output_dir: "output/sggp/pretrain"
+
+  amp: False
+  resume_ckpt_path: "/home/cxg/projectX/lavis/output/sggp/pretrain/20230515232/checkpoint_60003.pth"
+#  resume_ckpt_path: null
+  evaluate: False
+  train_splits: ["train"]
+
+  device: "cuda"
+  world_size: 1
+  dist_url: "env://"
+  distributed: False
