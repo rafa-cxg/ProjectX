@@ -32,6 +32,7 @@ from lavis.runners import *
 from lavis.tasks import *
 import wandb
 
+#todo 1 添加wendb查看训练，2 数据集中断处继续训练 3 warmup 不限于1个 inner epoch内
 def parse_args():
     parser = argparse.ArgumentParser(description="Training")
 

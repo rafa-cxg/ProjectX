@@ -133,31 +133,32 @@ class SggpPretrain(SggpBase, MomentumDistilationMixin, SharedQueueMixin):
             self.temp.clamp_(0.001, 0.5)
 
         image_det = []
-        dict = {}
+
         for i in image:
-            dict['image']=i
-            image_det.append(dict)
+            image_det.append({"image":i})
         with torch.no_grad():
             self.detector.eval()
             detect_results = self.detector(image_det)
             interactive_mask = self.interactive_masking(detect_results)
-            interactive_mask = block_mask | interactive_mask if interactive_mask!=None else block_mask
+            interactive_mask = (block_mask | interactive_mask) if interactive_mask!=None else block_mask
             #mask visualization
-            image_mask = torch.ones_like(image)
-            for b in range(image.shape[0]):
-                for block in range(self.window_size**2):
-                    for i in range(interactive_mask.shape[0]):
-                        for j in range(interactive_mask.shape[1]):
-                            image_mask[b,:,i*self.unified_encoder.model_cfg.patch_size:(i+1)*self.unified_encoder.model_cfg.patch_size,j*self.unified_encoder.model_cfg.patch_size:(j+1)*self.unified_encoder.model_cfg.patch_size] = 1-interactive_mask[b,i,j]
-
-            plt.imshow((image[0].cpu()*image_mask[0].cpu()).permute(1,2,0))
-            plt.show()
+            # image_mask = torch.ones_like(image)
+            # for b in range(image.shape[0]):
+            #
+            #     for i in range(interactive_mask.shape[1]):
+            #         for j in range(interactive_mask.shape[2]):
+            #             image_mask[b,:,i*patch_size:(i+1)*patch_size,j*patch_size:(j+1)*patch_size] \
+            #                 = 1-interactive_mask[b,i,j]
+            #
+            # if interactive_mask!= None:
+            #     plt.imshow((image[0].cpu()*image_mask[0].cpu()).permute(1,2,0))
+            #     plt.show()
             # region 目标检测可视化效果
-            metadata = MetadataCatalog.get('coco_2017_train')
-            vis = Visualizer(image[0].permute(1,2,0).cpu()*255) #metadata
-            vis_pred = vis.draw_instance_predictions(detect_results[0][0]['instances'].to("cpu")).get_image()
-            plt.imshow(vis_pred)
-            plt.show()
+            # metadata = MetadataCatalog.get('coco_2017_train')
+            # vis = Visualizer(image[0].permute(1,2,0).cpu()*255) #metadata
+            # vis_pred = vis.draw_instance_predictions(detect_results[0][0]['instances'].to("cpu")).get_image()
+            # plt.imshow(vis_pred)
+            # plt.show()
             # endregion
         # image_embeds = self.visual_encoder.forward(image)['last_feat']
         # image_embeds = rearrange(image_embeds, 'b d w h -> b (w h) d')

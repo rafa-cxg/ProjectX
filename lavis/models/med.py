@@ -14,6 +14,7 @@ import warnings
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
+import numpy as np
 import torch
 from timm.models.vision_transformer import PatchEmbed
 from transformers import BertConfig
@@ -1219,8 +1220,9 @@ class BertForMaskedLM(BertPreTrainedModel):
 
 class UnifiedBertForMaskedLM(BertPreTrainedModel):
 
+    # base_model_prefix = "UnifiedBertForMaskedLM"
     _keys_to_ignore_on_load_unexpected = [r"pooler"]
-    _keys_to_ignore_on_load_missing = [r"position_ids", r"predictions.decoder.bias"]
+    _keys_to_ignore_on_load_missing = [r"position_ids", r"predictions.decoder.bias",r"text_pos_embed",r"LayerNorm.weight",r"LayerNorm.bias"]
 
     @classmethod
     def from_config(cls, cfg, from_pretrained=False):
@@ -1242,6 +1244,8 @@ class UnifiedBertForMaskedLM(BertPreTrainedModel):
 
         self.bertconfig = config
         self.model_cfg = model_cfg
+        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
         self.word_embeddings = nn.Embedding(
             self.bertconfig.vocab_size, self.bertconfig.hidden_size, padding_idx=self.bertconfig.pad_token_id
@@ -1249,6 +1253,7 @@ class UnifiedBertForMaskedLM(BertPreTrainedModel):
         self.embeddings = UnifiedBertEmbeddings(config)  # word and position embedding
         self.bert = BertModel(self.bertconfig, add_pooling_layer=False)
         self.encoder_to_decoder = nn.Linear(768, 512, bias=False)
+
         self.vision_decoder= PretrainVisionTransformerDecoder(
             patch_size=16,
             num_patches=196,
@@ -1270,7 +1275,7 @@ class UnifiedBertForMaskedLM(BertPreTrainedModel):
         self.cls_token = nn.Parameter(torch.zeros(1, 1, self.bertconfig.hidden_size))
         image_size = self.model_cfg.get("image_size",224)
         embed_dim =  self.model_cfg.get("vit_embed_dim",768)
-        drop_rate = 0.0
+
 
         self.patch_embed = PatchEmbed(
             img_size=image_size,
@@ -1278,10 +1283,12 @@ class UnifiedBertForMaskedLM(BertPreTrainedModel):
             in_chans=3,
             embed_dim=embed_dim,
         )
-
         self.num_patches = self.patch_embed.num_patches
+        self.decoder_pos_embed = get_sinusoid_encoding_table(self.num_patches, 512)
+
         self.image_pos_embed = nn.Parameter(torch.zeros(1, self.num_patches + 1, embed_dim))
-        self.pos_drop = nn.Dropout(p=drop_rate)
+        self.text_pos_embed = nn.Parameter(torch.zeros(1, self.model_cfg.max_txt_len, embed_dim))
+
 
 
         self.init_weights()
@@ -1345,10 +1352,14 @@ class UnifiedBertForMaskedLM(BertPreTrainedModel):
         x = torch.cat((cls_tokens, x), dim=1)
 
         x = x + self.image_pos_embed
-        x = self.pos_drop(x)
+        x = self.LayerNorm(x)
+        x = self.dropout(x)
 
 
         word_embeddings = self.word_embeddings(input_text_ids)
+        word_embeddings = word_embeddings + self.text_pos_embed
+        word_embeddings = self.LayerNorm(word_embeddings)
+
         unified_embeddings = torch.cat((x,word_embeddings),1)
 
         image_atts = torch.ones(x.size()[:-1], dtype=torch.long).to(  # (bs,1+um_patch)
@@ -1398,6 +1409,8 @@ class UnifiedBertForMaskedLM(BertPreTrainedModel):
         if labels is not None and patch_mask != None:
 
             decoder_input = self.encoder_to_decoder(sequence_output[:, 1:self.num_patches+1, :])
+            expand_pos_embed = self.decoder_pos_embed.expand(B, -1, -1).type_as(x).to(decoder_input.device).clone().detach()
+            decoder_input = decoder_input+expand_pos_embed
             prediction_scores,selected_labels = self.vision_decoder(decoder_input, labels,flatten_patch_mask.squeeze()) #todo 确认是向前还是向后取值
             loss_fct = nn.MSELoss()
             masked_loss = loss_fct(
@@ -1748,3 +1761,16 @@ class XBertEncoder(BertModel, BaseEncoder):
 
         return text_output
 
+# sin-cos position encoding
+# https://github.com/jadore801120/attention-is-all-you-need-pytorch/blob/master/transformer/Models.py#L31
+def get_sinusoid_encoding_table(n_position, d_hid):
+    ''' Sinusoid position encoding table '''
+    # TODO: make it with torch instead of numpy
+    def get_position_angle_vec(position):
+        return [position / np.power(10000, 2 * (hid_j // 2) / d_hid) for hid_j in range(d_hid)]
+
+    sinusoid_table = np.array([get_position_angle_vec(pos_i) for pos_i in range(n_position)])
+    sinusoid_table[:, 0::2] = np.sin(sinusoid_table[:, 0::2]) # dim 2i
+    sinusoid_table[:, 1::2] = np.cos(sinusoid_table[:, 1::2]) # dim 2i+1
+
+    return torch.FloatTensor(sinusoid_table).unsqueeze(0)

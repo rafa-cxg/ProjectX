@@ -84,10 +84,10 @@ class InteractMaskingGenerator:
     def _interact_mask(self, mask, max_mask_patches,union_box):
         delta = 0  # 真正新mask的patch数目
 
-        h =  abs(union_box[3] - union_box[1])
-        w = abs(union_box[2] - union_box[0])
-        x = min(union_box[2],union_box[0])#x
-        y = min(union_box[1], union_box[3])
+        w =  abs(union_box[3] - union_box[1])
+        h = abs(union_box[2] - union_box[0])
+        y = min(union_box[2],union_box[0])
+        x = min(union_box[1], union_box[3])
 
         num_masked = mask[x: x+w,y: y+h].sum()
         max_mask_patches = 12000
@@ -117,11 +117,15 @@ class InteractMaskingGenerator:
 
                     box1 = boxes[0]
                     box2 = boxes[1]
-                    xmin = math.floor(int((max(box1[0], box2[0]))/self.patch_size))
-                    xmax = math.ceil(int((min(box1[2], box2[2]))/self.patch_size))
-                    ymin = math.floor(int((max(box1[1], box2[1]))/self.patch_size))
-                    ymax = math.ceil(int((min(box1[3], box2[3]))/self.patch_size))
-                    # if (xmax-xmin)(ymax-ymin) >0: todo 当前策略：不必两两相交
+                    xmin = int((max(box1[0], box2[0]))/self.patch_size)
+                    xmax = int((min(box1[2], box2[2]))/self.patch_size)
+                    ymin = int((max(box1[1], box2[1]))/self.patch_size)
+                    ymax = int((min(box1[3], box2[3]))/self.patch_size)
+                    if (xmax-xmin)== 0:
+                        xmax = xmin+1
+                    if  (ymax-ymin) ==0:
+                        ymax = ymin+1
+
                     union_box = (xmin,ymin,xmax,ymax)
                     mask = self._interact_mask(mask, self.max_num_patches, union_box)
 
